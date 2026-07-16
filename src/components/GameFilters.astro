@@ -1,0 +1,170 @@
+---
+import type { Category, Publisher } from '../types/game';
+
+interface Props {
+    categories: readonly Category[];
+    publishers: readonly Publisher[];
+}
+
+const { categories, publishers } = Astro.props;
+---
+
+<section
+    class="mb-8 bg-slate-800/60 backdrop-blur-sm rounded-xl border border-slate-700/50 p-6"
+    aria-labelledby="game-filters-heading"
+    data-testid="game-filters"
+>
+    <div class="flex items-center justify-between mb-4">
+        <h3 id="game-filters-heading" class="text-lg font-medium text-slate-100">
+            Filter games
+        </h3>
+        <button
+            type="button"
+            class="text-sm text-blue-400 hover:text-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800 rounded px-2 py-1 transition-colors"
+            data-testid="filters-clear"
+        >
+            Clear filters
+        </button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <fieldset data-testid="filters-categories">
+            <legend class="text-sm font-medium text-slate-200 mb-2">Categories</legend>
+            {categories.length === 0 ? (
+                <p class="text-sm text-slate-400">No categories available.</p>
+            ) : (
+                <ul class="flex flex-wrap gap-x-4 gap-y-2">
+                    {categories.map((category) => (
+                        <li>
+                            <label class="inline-flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    class="h-4 w-4 rounded border-slate-500 bg-slate-900 text-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800"
+                                    data-filter="category"
+                                    value={category.id}
+                                    data-testid={`filter-category-${category.id}`}
+                                />
+                                <span>{category.name}</span>
+                            </label>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </fieldset>
+
+        <fieldset data-testid="filters-publishers">
+            <legend class="text-sm font-medium text-slate-200 mb-2">Publishers</legend>
+            {publishers.length === 0 ? (
+                <p class="text-sm text-slate-400">No publishers available.</p>
+            ) : (
+                <ul class="flex flex-wrap gap-x-4 gap-y-2">
+                    {publishers.map((publisher) => (
+                        <li>
+                            <label class="inline-flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    class="h-4 w-4 rounded border-slate-500 bg-slate-900 text-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-800"
+                                    data-filter="publisher"
+                                    value={publisher.id}
+                                    data-testid={`filter-publisher-${publisher.id}`}
+                                />
+                                <span>{publisher.name}</span>
+                            </label>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </fieldset>
+    </div>
+
+    <p
+        class="mt-4 text-sm text-slate-400"
+        role="status"
+        aria-live="polite"
+        data-testid="filters-summary"
+    >
+        Showing all games
+    </p>
+</section>
+
+<script>
+    const filtersRoot = document.querySelector<HTMLElement>('[data-testid="game-filters"]');
+    const gamesGrid = document.querySelector<HTMLElement>('[data-testid="games-grid"]');
+    const noMatches = document.querySelector<HTMLElement>('[data-testid="games-no-matches"]');
+
+    if (filtersRoot && gamesGrid) {
+        const cards = Array.from(
+            gamesGrid.querySelectorAll<HTMLElement>('[data-testid="game-card"]'),
+        );
+        const summary = filtersRoot.querySelector<HTMLElement>('[data-testid="filters-summary"]');
+        const clearButton = filtersRoot.querySelector<HTMLButtonElement>(
+            '[data-testid="filters-clear"]',
+        );
+        const totalCount = cards.length;
+
+        const selectedValues = (filterKind: 'category' | 'publisher'): Set<string> => {
+            const nodes = filtersRoot.querySelectorAll<HTMLInputElement>(
+                `input[data-filter="${filterKind}"]:checked`,
+            );
+            return new Set(Array.from(nodes, (input) => input.value));
+        };
+
+        const applyFilters = (): void => {
+            const selectedCategories = selectedValues('category');
+            const selectedPublishers = selectedValues('publisher');
+            const noneSelected =
+                selectedCategories.size === 0 && selectedPublishers.size === 0;
+
+            let visibleCount = 0;
+            for (const card of cards) {
+                const categoryId = card.dataset.categoryId ?? '';
+                const publisherId = card.dataset.publisherId ?? '';
+                const categoryMatch =
+                    selectedCategories.size === 0 || selectedCategories.has(categoryId);
+                const publisherMatch =
+                    selectedPublishers.size === 0 || selectedPublishers.has(publisherId);
+                const matches = categoryMatch && publisherMatch;
+                card.hidden = !matches;
+                if (matches) {
+                    visibleCount += 1;
+                }
+            }
+
+            if (noMatches) {
+                noMatches.hidden = visibleCount > 0;
+            }
+            if (gamesGrid) {
+                gamesGrid.hidden = totalCount > 0 && visibleCount === 0;
+            }
+
+            if (summary) {
+                if (noneSelected) {
+                    summary.textContent = `Showing all ${totalCount} games`;
+                } else if (visibleCount === 0) {
+                    summary.textContent = 'No games match the selected filters';
+                } else {
+                    summary.textContent = `Showing ${visibleCount} of ${totalCount} games`;
+                }
+            }
+        };
+
+        filtersRoot.addEventListener('change', (event) => {
+            const target = event.target as HTMLElement | null;
+            if (target instanceof HTMLInputElement && target.dataset.filter) {
+                applyFilters();
+            }
+        });
+
+        clearButton?.addEventListener('click', () => {
+            const checked = filtersRoot.querySelectorAll<HTMLInputElement>(
+                'input[data-filter]:checked',
+            );
+            checked.forEach((input) => {
+                input.checked = false;
+            });
+            applyFilters();
+        });
+
+        applyFilters();
+    }
+</script>
